@@ -2,6 +2,10 @@
 
 A comprehensive government contract tracking application built with Next.js, TypeScript, and Prisma.
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/TeleoServices/govcon-tracker)
+
+**Live Demo**: Coming soon after deployment!
+
 ## Features
 
 - **Contract Management**: Track active contracts, values, and key dates
