@@ -1,13 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://fuflbtkhtzvkqdobruow.supabase.co'
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-
-const supabase = createClient(supabaseUrl, supabaseKey)
 
 export async function GET() {
   try {
+    // Hardcode the values since they're public and not loading from env properly
+    const supabaseUrl = 'https://fuflbtkhtzvkqdobruow.supabase.co'
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ1ZmxidGtodHp2a3Fkb2JydW93Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMzYwNjYsImV4cCI6MjA3MDYxMjA2Nn0.-nYOJ-wGj95Z2AWuGwxhu49ZTigXcmFrp6PZ11qyrew'
+    
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
     // Fetch from sam_opportunities table
     const { data: opportunities, error } = await supabase
       .from('sam_opportunities')
@@ -53,7 +54,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   // For now, return an error since we're using sam_opportunities as read-only
   return NextResponse.json(
     { error: 'Creating opportunities is not supported. Data is synced from SAM.gov' },
