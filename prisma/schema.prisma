@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -17,13 +17,7 @@ model User {
   lastLogin       DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
-  createdBy       String?
   sessions        Session[]
-  // Audit trail
-  createdOpportunities    Opportunity[]   @relation("CreatedBy")
-  createdVendors         Vendor[]        @relation("CreatedBy")
-  createdContracts       Contract[]      @relation("CreatedBy")
-  createdContactLogs     ContactLog[]    @relation("CreatedBy")
 }
 
 model Session {
@@ -33,111 +27,4 @@ model Session {
   expiresAt       DateTime
   createdAt       DateTime        @default(now())
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model Vendor {
-  id              String          @id @default(cuid())
-  name            String
-  company         String
-  trade           String
-  duns            String?         @unique
-  cageCode        String?         @unique
-  samRegistered   Boolean         @default(false)
-  capabilities    String?         // JSON array as string
-  naicsCode       String?         // JSON array as string
-  address         String?
-  contactEmail    String?
-  contactPhone    String?
-  website         String?
-  location        String?
-  certifications  String?         // JSON array as string
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  createdById     String?
-  createdBy       User?           @relation("CreatedBy", fields: [createdById], references: [id])
-  contracts       Contract[]
-  opportunities   Opportunity[]
-  contactLogs     ContactLog[]
-}
-
-model Contract {
-  id              String          @id @default(cuid())
-  contractNumber  String          @unique
-  title           String
-  description     String?
-  vendorId        String
-  agency          String
-  value           Float
-  startDate       DateTime
-  endDate         DateTime
-  status          String          @default("ACTIVE")
-  type            String
-  setAside        String?
-  naicsCode       String?
-  popLocation     String?
-  contactName     String?
-  contactEmail    String?
-  contactPhone    String?
-  notes           String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  createdById     String?
-  createdBy       User?           @relation("CreatedBy", fields: [createdById], references: [id])
-  vendor          Vendor          @relation(fields: [vendorId], references: [id])
-  modifications   Modification[]
-}
-
-model Opportunity {
-  id                  String          @id @default(cuid())
-  solNo               String          @unique
-  title               String
-  description         String?
-  agency              String
-  naics               String?
-  stage               String          @default("IDENTIFIED")
-  dueDate             DateTime?
-  priority            String          @default("MEDIUM")
-  postedDate          DateTime
-  estimatedValue      Float?
-  type                String
-  setAside            String?
-  placeOfPerformance  String?
-  status              String          @default("OPEN")
-  samUrl              String?
-  attachments         String?         // JSON array as string
-  vendorId            String?
-  notes               String?
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-  createdById         String?
-  createdBy           User?           @relation("CreatedBy", fields: [createdById], references: [id])
-  vendor              Vendor?         @relation(fields: [vendorId], references: [id])
-  contactLogs         ContactLog[]
-}
-
-model ContactLog {
-  id              String          @id @default(cuid())
-  subId           String
-  oppId           String
-  date            DateTime
-  method          String
-  status          String
-  notes           String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  createdById     String?
-  createdBy       User?           @relation("CreatedBy", fields: [createdById], references: [id])
-  subcontractor   Vendor          @relation(fields: [subId], references: [id])
-  opportunity     Opportunity     @relation(fields: [oppId], references: [id])
-}
-
-model Modification {
-  id              String          @id @default(cuid())
-  contractId      String
-  modNumber       String
-  description     String
-  value           Float?
-  effectiveDate   DateTime
-  createdAt       DateTime        @default(now())
-  contract        Contract        @relation(fields: [contractId], references: [id])
 }
