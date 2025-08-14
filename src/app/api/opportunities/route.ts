@@ -9,48 +9,57 @@ export async function GET() {
     
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Fetch from sam_opportunities table
+    // Fetch from sam_opportunities table with correct column names
     const { data: opportunities, error } = await supabase
       .from('sam_opportunities')
-      .select('*')
-      .order('response_date', { ascending: true })
-      .limit(100) // Limit to recent 100 for performance
+      .select('id, title, department_name, office_name, response_deadline, posted_date, active, opportunity_type, notice_id, naics_code, set_aside_type, location, ui_link')
+      .order('response_deadline', { ascending: true })
+      .limit(50) // Get 50 opportunities
     
     if (error) {
       console.error('Supabase error:', error)
-      throw error
+      return NextResponse.json({ 
+        error: 'Supabase query failed',
+        details: error.message,
+        hint: error.hint
+      }, { status: 500 })
     }
 
-    // Transform sam_opportunities data to match expected format
+    // Transform with correct column mapping
     const transformedOpportunities = opportunities?.map(opp => ({
       id: opp.id,
       solNo: opp.notice_id || opp.id,
-      title: opp.title,
-      description: opp.description,
-      agency: opp.agency_name || 'N/A',
-      naics: opp.naics_code,
-      stage: 'IDENTIFIED', // Default stage since sam_opportunities doesn't have this
-      dueDate: opp.response_date,
-      priority: 'MEDIUM', // Default priority
+      title: opp.title || 'Untitled',
+      description: '', // Not available in this table
+      agency: `${opp.department_name || ''} ${opp.office_name || ''}`.trim() || 'N/A',
+      naics: opp.naics_code || '',
+      stage: 'IDENTIFIED',
+      dueDate: opp.response_deadline,
+      priority: 'MEDIUM',
       postedDate: opp.posted_date,
-      estimatedValue: null, // sam_opportunities doesn't have this
-      type: opp.type || 'Solicitation',
-      setAside: opp.set_aside_type,
-      placeOfPerformance: opp.place_of_performance,
-      status: opp.active === 'Yes' ? 'OPEN' : 'CLOSED',
-      samUrl: opp.url,
+      estimatedValue: null,
+      type: opp.opportunity_type || 'Solicitation',
+      setAside: opp.set_aside_type || '',
+      placeOfPerformance: opp.location || '',
+      status: opp.active ? 'OPEN' : 'CLOSED',
+      samUrl: opp.ui_link || '',
       attachments: null,
       vendorId: null,
       notes: null,
-      createdAt: opp.created_at,
-      updatedAt: opp.updated_at,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       vendor: null
     })) || []
 
+    console.log(`Successfully fetched ${transformedOpportunities.length} opportunities`)
     return NextResponse.json(transformedOpportunities)
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching opportunities:', error)
-    return NextResponse.json({ error: 'Failed to fetch opportunities' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Failed to fetch opportunities',
+      message: error.message,
+      stack: error.stack
+    }, { status: 500 })
   }
 }
 
