@@ -1,0 +1,604 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String    // hashed
+  name          String?
+  isActive      Boolean   @default(true)
+  lastLogin     DateTime?
+
+  // Relationships
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  sessions       Session[]
+  activities     Activity[]
+  teamMembers    TeamMember[]
+  documentsCreated Document[] @relation("CreatedBy")
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([email])
+  @@index([organizationId])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+  @@index([token])
+}
+
+// ============================================
+// ORGANIZATIONS
+// ============================================
+
+model Organization {
+  id                String    @id @default(cuid())
+  name              String
+  dunsNumber        String?   @unique
+  cageCode          String?   @unique
+  uei               String?   @unique
+  organizationType  String?   // Prime, Sub, Small Business, etc.
+
+  // Contact & Location
+  address           String?
+  industryNAICS     String?   // JSON array
+  certifications    String?   // JSON array
+
+  // Relationships
+  users             User[]
+  subcontractors    Subcontractor[]
+  opportunities     Opportunity[]
+  contracts         Contract[]
+  quotes            Quote[]
+  activities        Activity[]
+  documents         Document[]
+  kpiSnapshots      KPISnapshot[]
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([name])
+}
+
+// ============================================
+// SAM.GOV OPPORTUNITIES (Raw data from SAM.gov API)
+// ============================================
+
+model SamGovOpportunity {
+  id                    String    @id @default(cuid())
+
+  // SAM.gov Fields
+  noticeId              String    @unique
+  solicitationNumber    String?
+  title                 String
+  description           String?
+
+  // Organization & Agency
+  agencyName            String?
+  departmentName        String?
+  officeName            String?
+
+  // Classification
+  noticeType            String?   // Solicitation, Award, Special Notice, etc.
+  baseType              String?   // RFP, RFQ, RFI, etc.
+  naicsCode             String?   // Primary NAICS
+  naicsCodes            String?   // JSON array of all NAICS
+  setAsideType          String?   // Small Business, 8(a), etc.
+
+  // Dates
+  postedDate            DateTime?
+  responseDeadline      DateTime?
+  archiveDate           DateTime?
+
+  // Financial
+  estimatedValue        Float?
+  awardAmount           Float?
+
+  // Location
+  placeOfPerformance    String?   // JSON with city, state, zip, country
+
+  // Links
+  descriptionLink       String?
+  additionalInfoLink    String?
+
+  // Tracking
+  addedToPipeline       Boolean   @default(false) // Has this been added to Opportunities?
+  addedToPipelineAt     DateTime?
+
+  // Relationships
+  opportunities         Opportunity[] // Can create multiple opportunities from one SAM.gov listing
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([noticeId])
+  @@index([addedToPipeline])
+  @@index([postedDate])
+}
+
+// ============================================
+// OPPORTUNITIES (Active Pipeline - Selected from SAM.gov)
+// ============================================
+
+model Opportunity {
+  id                    String    @id @default(cuid())
+
+  // Link to source SAM.gov opportunity
+  samGovOpportunityId   String?
+  samGovOpportunity     SamGovOpportunity? @relation(fields: [samGovOpportunityId], references: [id])
+
+  // Basic Information (copied from SAM.gov or manually entered)
+  solicitationNumber    String
+  title                 String
+  description           String?
+
+  // Organization & Agency
+  organizationId        String
+  organization          Organization @relation(fields: [organizationId], references: [id])
+
+  agencyName            String
+  departmentName        String?
+  officeName            String?
+
+  // Classification
+  noticeType            String?   // Solicitation, Award, Special Notice, etc.
+  baseType              String?   // RFP, RFQ, RFI, etc.
+  naicsCode             String?   // Primary NAICS
+  naicsCodes            String?   // JSON array of all NAICS
+  setAsideType          String?   // Small Business, 8(a), etc.
+
+  // Dates
+  postedDate            DateTime?
+  responseDeadline      DateTime?
+  archiveDate           DateTime?
+
+  // Financial
+  estimatedValue        Float?
+  awardAmount           Float?
+
+  // Location
+  placeOfPerformance    String?   // JSON with city, state, zip, country
+
+  // Links
+  descriptionLink       String?
+  additionalInfoLink    String?
+
+  // Pipeline Tracking
+  stage                 String    @default("Identified") // Identified, Pursuit, Capture, Proposal Dev, Submitted
+  status                String    @default("Active")     // Active, Won, Lost, Cancelled
+  probability           Float?    // 0-100
+
+  // Win/Loss Tracking
+  lostReason            String?   // Why we lost (if status = Lost)
+  lostFeedback          String?   // Detailed feedback for lost opportunities
+  lostDate              DateTime? // When we were notified of loss
+
+  wonDate               DateTime? // When we were notified of win
+  contractNumber        String?   // If awarded
+
+  // Relationships
+  contracts             Contract[] // Can have multiple contracts from one opportunity
+  teamMembers           TeamMember[]
+  complianceRequirements ComplianceRequirement[]
+  quotes                Quote[]
+  activities            Activity[]
+  documents             Document[]
+  performanceLocations  OpportunityPerformanceLocation[]
+  officeAddresses       OpportunityOfficeAddress[]
+  contacts              OpportunityContact[]
+  awards                OpportunityAward[]
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  createdBy             String?   // User ID as string
+
+  @@index([solicitationNumber])
+  @@index([samGovOpportunityId])
+  @@index([stage])
+  @@index([status])
+  @@index([organizationId])
+  @@index([agencyName])
+}
+
+model OpportunityPerformanceLocation {
+  id             String       @id @default(cuid())
+  opportunityId  String
+  opportunity    Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  streetAddress  String?
+  streetAddress2 String?
+  city           String?
+  state          String?
+  zip            String?
+  country        String?
+
+  createdAt      DateTime     @default(now())
+
+  @@index([opportunityId])
+}
+
+model OpportunityOfficeAddress {
+  id             String       @id @default(cuid())
+  opportunityId  String
+  opportunity    Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  city           String?
+  state          String?
+  zip            String?
+  country        String?
+
+  createdAt      DateTime     @default(now())
+
+  @@index([opportunityId])
+}
+
+model OpportunityContact {
+  id             String       @id @default(cuid())
+  opportunityId  String
+  opportunity    Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  contactType    String?      // Primary, Secondary, etc.
+  title          String?
+  fullName       String?
+  email          String?
+  phone          String?
+  fax            String?
+  additionalInfo String?
+
+  createdAt      DateTime     @default(now())
+
+  @@index([opportunityId])
+}
+
+model OpportunityAward {
+  id             String       @id @default(cuid())
+  opportunityId  String
+  opportunity    Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  awardNumber    String?
+  awardAmount    Float?
+  awardDate      DateTime?
+  awardeeName    String?
+  awardeeDuns    String?
+  awardeeAddress String?
+  awardeeCity    String?
+  awardeeState   String?
+  awardeeCountry String?
+  awardeeZip     String?
+
+  createdAt      DateTime     @default(now())
+
+  @@index([opportunityId])
+}
+
+// ============================================
+// TEAM MEMBERS
+// ============================================
+
+model TeamMember {
+  id             String       @id @default(cuid())
+  opportunityId  String
+  opportunity    Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role           String       // Lead, Contributor, Reviewer, etc.
+  assignedDate   DateTime     @default(now())
+
+  @@unique([opportunityId, userId])
+  @@index([opportunityId])
+  @@index([userId])
+}
+
+// ============================================
+// CONTRACTS
+// ============================================
+
+model Contract {
+  id                String    @id @default(cuid())
+  contractNumber    String    @unique
+  title             String
+
+  // Link to source opportunity
+  opportunityId     String?
+  opportunity       Opportunity? @relation(fields: [opportunityId], references: [id])
+
+  // Organization
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Contract Details
+  agencyName        String
+  contractType      String    // FFP, T&M, Cost-Plus, IDIQ, etc.
+  status            String    @default("Active") // Active, Completed, Terminated
+
+  // Financial
+  baseValue         Float
+  totalValue        Float
+  currentValue      Float
+
+  // Dates
+  awardDate         DateTime
+  startDate         DateTime
+  endDate           DateTime
+
+  // Relationships
+  modifications     Modification[]
+  activities        Activity[]
+  documents         Document[]
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([contractNumber])
+  @@index([opportunityId])
+  @@index([organizationId])
+  @@index([status])
+}
+
+model Modification {
+  id                String    @id @default(cuid())
+  modificationNumber String
+
+  contractId        String
+  contract          Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  type              String    // Administrative, Funding, Scope Change, Extension
+  description       String
+  valueChange       Float     @default(0)
+  newTotalValue     Float
+  effectiveDate     DateTime
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([contractId, modificationNumber])
+  @@index([contractId])
+}
+
+// ============================================
+// SUBCONTRACTORS
+// ============================================
+
+model Subcontractor {
+  id                  String        @id @default(cuid())
+  organizationId      String
+  organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  companyName         String
+  dunsNumber          String?
+  cageCode            String?
+
+  // Contact
+  contactName         String?
+  email               String?
+  phone               String?
+
+  // Capabilities
+  specialties         String?       // JSON array
+  performanceRating   Float?        // 1-5 stars
+
+  // Status
+  status              String        @default("Active") // Active, Inactive, SAM Registered, Pending SAM
+  samRegistered       Boolean       @default(false)
+
+  // Relationships
+  quotes              Quote[]
+  activities          Activity[]
+
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@index([organizationId])
+  @@index([companyName])
+}
+
+// ============================================
+// QUOTES
+// ============================================
+
+model Quote {
+  id                String          @id @default(cuid())
+  opportunityId     String?
+  opportunity       Opportunity?    @relation(fields: [opportunityId], references: [id])
+
+  subcontractorId   String?
+  subcontractor     Subcontractor?  @relation(fields: [subcontractorId], references: [id])
+
+  organizationId    String
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  amount            Float
+  quoteDate         DateTime
+  validUntil        DateTime?
+  status            String          @default("Pending") // Pending, Accepted, Rejected
+
+  documents         String?         // JSON array of document IDs
+  notes             String?
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([opportunityId])
+  @@index([subcontractorId])
+  @@index([organizationId])
+}
+
+// ============================================
+// COMPLIANCE REQUIREMENTS
+// ============================================
+
+model ComplianceRequirement {
+  id                String       @id @default(cuid())
+  opportunityId     String
+  opportunity       Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  requirementType   String       // Certification, Document, Registration, etc.
+  description       String
+  dueDate           DateTime?
+  status            String       @default("Pending") // Pending, In Progress, Complete
+
+  assignedTo        String?      // User ID
+  completedDate     DateTime?
+  evidence          String?      // Document ID or link
+
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([opportunityId])
+  @@index([status])
+}
+
+// ============================================
+// DOCUMENTS
+// ============================================
+
+model Document {
+  id                String        @id @default(cuid())
+  organizationId    String?
+  organization      Organization? @relation(fields: [organizationId], references: [id])
+
+  name              String
+  type              String        // Proposal, Contract, Quote, Compliance, etc.
+  size              Int?          // bytes
+  storagePath       String        // File system path or cloud URL
+
+  // Associations (Entity Type + Entity ID pattern)
+  entityType        String?       // Opportunity, Contract, Quote, etc.
+  entityId          String?       // ID of the related entity
+
+  // Relationships
+  opportunityId     String?
+  opportunity       Opportunity?  @relation(fields: [opportunityId], references: [id])
+
+  contractId        String?
+  contract          Contract?     @relation(fields: [contractId], references: [id])
+
+  // Metadata
+  version           Int           @default(1)
+  uploadedBy        String?
+  uploadedByUser    User?         @relation("CreatedBy", fields: [uploadedBy], references: [id])
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([organizationId])
+  @@index([entityType, entityId])
+  @@index([opportunityId])
+  @@index([contractId])
+}
+
+// ============================================
+// ACTIVITIES (Audit Trail)
+// ============================================
+
+model Activity {
+  id                String        @id @default(cuid())
+  organizationId    String
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Entity tracking
+  entityType        String        // Opportunity, Contract, Subcontractor, etc.
+  entityId          String
+
+  // Activity details
+  activityType      String        // Created, Updated, Status Change, Comment, etc.
+  description       String
+
+  // User tracking
+  userId            String?
+  user              User?         @relation(fields: [userId], references: [id])
+
+  // Relationships (for easier querying)
+  opportunityId     String?
+  opportunity       Opportunity?  @relation(fields: [opportunityId], references: [id])
+
+  contractId        String?
+  contract          Contract?     @relation(fields: [contractId], references: [id])
+
+  subcontractorId   String?
+  subcontractor     Subcontractor? @relation(fields: [subcontractorId], references: [id])
+
+  activityDate      DateTime      @default(now())
+  metadata          String?       // JSON for additional data
+
+  createdAt         DateTime      @default(now())
+
+  @@index([organizationId])
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([activityDate])
+}
+
+// ============================================
+// KPI SNAPSHOTS
+// ============================================
+
+model KPISnapshot {
+  id                    String        @id @default(cuid())
+  organizationId        String
+  organization          Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  snapshotDate          DateTime      @default(now())
+
+  // KPI Metrics
+  totalContractValue    Float         @default(0)
+  winRate               Float         @default(0)
+  pipelineValue         Float         @default(0)
+  activeOpportunities   Int           @default(0)
+  avgDealCycle          Int           @default(0) // days
+
+  // Additional metrics stored as JSON
+  otherMetrics          String?       // JSON
+
+  createdAt             DateTime      @default(now())
+
+  @@index([organizationId])
+  @@index([snapshotDate])
+}
+
+// ============================================
+// SAM.GOV SYNC LOGS
+// ============================================
+
+model SamApiSyncLog {
+  id                String    @id @default(cuid())
+  syncType          String    // full, incremental
+  status            String    // running, completed, failed
+  startTime         DateTime
+  endTime           DateTime?
+
+  totalRecords      Int       @default(0)
+  newRecords        Int       @default(0)
+  updatedRecords    Int       @default(0)
+
+  error             String?
+  apiParams         String?   // JSON
+
+  createdAt         DateTime  @default(now())
+
+  @@index([syncType])
+  @@index([status])
+  @@index([startTime])
+}
